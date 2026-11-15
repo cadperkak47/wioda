@@ -1,0 +1,1947 @@
+-- =============================================
+-- POTASSIUM EXECUTOR: HAVOC EXPLOIT SCRIPT
+-- Author: Elite Roblox Reverse Engineer
+-- Theme: Galaxy | Smoothness: 100% | Optimized for Potassium
+-- =============================================
+
+-- == SERVICES & CONSTANTS ==
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local Lighting = game:GetService("Lighting")
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+local HttpService = game:GetService("HttpService")
+
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local camera = workspace.CurrentCamera
+
+-- == CONFIG ==
+local CONFIG = {
+    -- UI
+    UIKey = Enum.KeyCode.Insert,
+    UIOpacity = 0.95,
+    UIStrokeThickness = 1.5,
+    UICornerRadius = 10,
+    TabBarWidth = 220,
+    TabBarHeight = 60,
+    TabSpacing = 12,
+    ContentX = 240,
+    ContentY = 60,
+    ContentWidth = 1000,
+    ContentHeight = 600,
+    MenuWidth = 1280,
+    MenuHeight = 720,
+
+    -- Combat
+    AimbotFOV = 120,
+    AimbotSmoothness = 0.1,
+    AimbotRageMode = false,
+    AimbotHitbox = "Head", -- "Head", "Torso", "Full"
+    SilentAim = true,
+    Triggerbot = true,
+    AutoFire = true,
+    TriggerbotDelay = 0.1,
+    AutoFireDelay = 0.1,
+
+    -- Visuals
+    ESP2DBox = true,
+    ESPName = true,
+    ESPDistance = true,
+    ESPHealthBar = true,
+    SkeletonESP = true,
+    ChamsEnabled = true,
+    TracerEnabled = true,
+    WorldMods = {
+        FullBright = true,
+        ClockTime = 12,
+        NoFog = true,
+    },
+
+    -- Movement
+    WalkSpeed = 16,
+    JumpPower = 50,
+    FlySpeed = 10,
+    FlyEnabled = false,
+    NoclipEnabled = false,
+    InfiniteJump = true,
+
+    -- Misc
+    AntiAFK = true,
+    AFKInterval = 120,
+    AFKAction = "MouseMove",
+    AFKActionThreshold = 10,
+}
+
+-- == UI STATE ==
+local UIState = {
+    MenuOpen = true,
+    ActiveTab = "Combat",
+    Dragging = false,
+    DragOffset = Vector2.new(0, 0),
+    TabPositions = {},
+    TabElements = {},
+    DrawingCache = {},
+    Mouse = Vector2.new(0, 0),
+    LastMouse = Vector2.new(0, 0),
+    DeltaTime = 0,
+}
+
+-- == DRAWING & RENDERING SETUP ==
+local DrawingImmediate = nil
+local DrawingLibrary = nil
+
+-- Attempt to load DrawingImmediate
+pcall(function()
+    DrawingImmediate = require(game:GetService("ServerScriptService"):FindFirstChild("DrawingImmediate"))
+    DrawingLibrary = DrawingImmediate
+end)
+
+if not DrawingImmediate then
+    DrawingLibrary = Drawing
+end
+
+-- == UTILITIES ==
+local function createDrawing(type, props)
+    local drawing = DrawingLibrary.new(type)
+    for k, v in pairs(props) do
+        drawing[k] = v
+    end
+    return drawing
+end
+
+local function createUIElement(elementType, parent, props)
+    local element = Instance.new(elementType)
+    for k, v in pairs(props) do
+        element[k] = v
+    end
+    element.Parent = parent
+    return element
+end
+
+local function createTween(element, properties, duration, easeStyle)
+    local tweenInfo = TweenInfo.new(duration, easeStyle or Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    return TweenService:Create(element, tweenInfo, properties)
+end
+
+local function updateUIStroke(element, color, thickness)
+    element.StrokeColor = color
+    element.StrokeTransparency = 0
+    element.StrokeThickness = thickness
+end
+
+local function updateUICorner(element, radius)
+    element.CornerRadius = UDim.new(0, radius)
+end
+
+-- == UI CREATION ==
+local function createMenu()
+    local hui = gethui() or player.PlayerGui
+    local frame = createUIElement("Frame", hui, {
+        Name = "HavocMenu",
+        Size = UDim2.new(0, CONFIG.MenuWidth, 0, CONFIG.MenuHeight),
+        Position = UDim2.new(0.5, -CONFIG.MenuWidth / 2, 0.5, -CONFIG.MenuHeight / 2),
+        BackgroundColor3 = Color3.fromRGB(10, 10, 15),
+        BackgroundTransparency = 0,
+        BorderColor3 = Color3.fromRGB(30, 20, 50),
+        BorderThickness = 1,
+        ZIndex = 10,
+    })
+
+    -- Top Bar (Draggable)
+    local topBar = createUIElement("Frame", frame, {
+        Name = "TopBar",
+        Size = UDim2.new(1, 0, 0, 60),
+        Position = UDim2.new(0, 0, 0, 0),
+        BackgroundColor3 = Color3.fromRGB(20, 20, 30),
+        BackgroundTransparency = 0,
+        BorderColor3 = Color3.fromRGB(40, 30, 70),
+        BorderThickness = 1,
+        ZIndex = 11,
+    })
+
+    local title = createUIElement("TextLabel", topBar, {
+        Name = "Title",
+        Size = UDim2.new(1, -60, 1, 0),
+        Position = UDim2.new(0, 10, 0, 0),
+        BackgroundTransparency = 1,
+        Text = "Havoc | Potassium Exploit",
+        TextColor3 = Color3.fromRGB(200, 255, 255),
+        TextSize = 20,
+        TextTransparency = 0,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Font = Enum.Font.GothamMedium,
+        ZIndex = 12,
+    })
+
+    local closeBtn = createUIElement("TextButton", topBar, {
+        Name = "CloseBtn",
+        Size = UDim2.new(0, 40, 0, 40),
+        Position = UDim2.new(1, -40, 0, 10),
+        BackgroundColor3 = Color3.fromRGB(50, 40, 90),
+        BackgroundTransparency = 0,
+        BorderColor3 = Color3.fromRGB(80, 60, 120),
+        BorderThickness = 1,
+        Text = "X",
+        TextColor3 = Color3.fromRGB(220, 255, 255),
+        TextSize = 18,
+        Font = Enum.Font.GothamBold,
+        ZIndex = 12,
+    })
+
+    -- Sidebar
+    local sidebar = createUIElement("Frame", frame, {
+        Name = "Sidebar",
+        Size = UDim2.new(0, CONFIG.TabBarWidth, 1, 0),
+        Position = UDim2.new(0, 0, 0, 60),
+        BackgroundColor3 = Color3.fromRGB(15, 15, 25),
+        BackgroundTransparency = 0,
+        BorderColor3 = Color3.fromRGB(30, 20, 50),
+        BorderThickness = 1,
+        ZIndex = 10,
+    })
+
+    -- Tab Buttons
+    local tabs = {
+        Combat = { Title = "Combat", Icon = "C" },
+        Visuals = { Title = "Visuals", Icon = "V" },
+        Movement = { Title = "Movement", Icon = "M" },
+        Settings = { Title = "Settings", Icon = "S" },
+    }
+
+    local tabElements = {}
+    local tabPositions = {}
+
+    for i, tab in ipairs(tabs) do
+        local btn = createUIElement("TextButton", sidebar, {
+            Name = "Tab_" .. tab.Title,
+            Size = UDim2.new(1, 0, 0, CONFIG.TabBarHeight),
+            Position = UDim2.new(0, 0, 0, (i - 1) * (CONFIG.TabBarHeight + CONFIG.TabSpacing)),
+            BackgroundColor3 = Color3.fromRGB(25, 20, 45),
+            BackgroundTransparency = 1,
+            BorderColor3 = Color3.fromRGB(40, 30, 70),
+            BorderThickness = 1,
+            Text = tab.Icon,
+            TextColor3 = Color3.fromRGB(180, 230, 255),
+            TextSize = 20,
+            Font = Enum.Font.GothamBold,
+            ZIndex = 11,
+        })
+
+        local label = createUIElement("TextLabel", btn, {
+            Name = "Label",
+            Size = UDim2.new(1, -30, 1, 0),
+            Position = UDim2.new(0, 30, 0, 0),
+            BackgroundTransparency = 1,
+            Text = tab.Title,
+            TextColor3 = Color3.fromRGB(180, 230, 255),
+            TextSize = 16,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Font = Enum.Font.GothamMedium,
+            ZIndex = 12,
+        })
+
+        -- Add glow effect on hover
+        local glow = createUIElement("Frame", btn, {
+            Name = "Glow",
+            Size = UDim2.new(1, 0, 1, 0),
+            BackgroundColor3 = Color3.fromRGB(0, 200, 255),
+            BackgroundTransparency = 0.5,
+            BorderColor3 = Color3.fromRGB(0, 200, 255),
+            BorderThickness = 1,
+            Visible = false,
+            ZIndex = 10,
+        })
+
+        updateUIStroke(glow, Color3.fromRGB(0, 200, 255), 1.5)
+        updateUICorner(glow, CONFIG.UICornerRadius)
+
+        -- Store tab data
+        tabElements[tab.Title] = {
+            Button = btn,
+            Label = label,
+            Glow = glow,
+            Index = i,
+        }
+
+        tabPositions[tab.Title] = btn.Position.Y.Offset
+    end
+
+    -- Content Area
+    local contentArea = createUIElement("Frame", frame, {
+        Name = "ContentArea",
+        Size = UDim2.new(1, -CONFIG.TabBarWidth, 1, -60),
+        Position = UDim2.new(0, CONFIG.TabBarWidth, 0, 60),
+        BackgroundColor3 = Color3.fromRGB(12, 12, 18),
+        BackgroundTransparency = 0,
+        BorderColor3 = Color3.fromRGB(30, 20, 50),
+        BorderThickness = 1,
+        ZIndex = 9,
+    })
+
+    -- Add to UIState
+    UIState.TabElements = tabElements
+    UIState.TabPositions = tabPositions
+
+    return {
+        Frame = frame,
+        TopBar = topBar,
+        Title = title,
+        CloseBtn = closeBtn,
+        Sidebar = sidebar,
+        ContentArea = contentArea,
+        Tabs = tabElements,
+        Positions = tabPositions,
+    }
+end
+
+-- == FEATURE: TAB SWITCHING ==
+local function setupTabSwitching(menu)
+    local tabs = menu.Tabs
+
+    for name, data in pairs(tabs) do
+        local btn = data.Button
+        local label = data.Label
+        local glow = data.Glow
+
+        btn.MouseEnter:Connect(function()
+            local tween = createTween(glow, { BackgroundTransparency = 0.2 }, 0.3, Enum.EasingStyle.Quad)
+            tween:Play()
+        end)
+
+        btn.MouseLeave:Connect(function()
+            local tween = createTween(glow, { BackgroundTransparency = 0.5 }, 0.3, Enum.EasingStyle.Quad)
+            tween:Play()
+        end)
+
+        btn.MouseButton1Click:Connect(function()
+            -- Fade out current tab
+            for tName, tData in pairs(tabs) do
+                local tween = createTween(tData.Label, { TextColor3 = Color3.fromRGB(180, 230, 255) }, 0.2, Enum.EasingStyle.Quad)
+                tween:Play()
+                tData.Glow.Visible = false
+            end
+
+            -- Activate new tab
+            local tween = createTween(label, { TextColor3 = Color3.fromRGB(255, 255, 255) }, 0.2, Enum.EasingStyle.Quad)
+            tween:Play()
+            glow.Visible = true
+
+            UIState.ActiveTab = name
+            UIState.DeltaTime = 0
+        end)
+    end
+
+    -- Close Button
+    menu.CloseBtn.MouseButton1Click:Connect(function()
+        menu.Frame.Visible = false
+        UIState.MenuOpen = false
+    end)
+
+    -- Top Bar Drag
+    menu.TopBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            UIState.Dragging = true
+            UIState.DragOffset = Vector2.new(
+                menu.Frame.AbsolutePosition.X - UserInputService:GetMouseLocation().X,
+                menu.Frame.AbsolutePosition.Y - UserInputService:GetMouseLocation().Y
+            )
+        end
+    end)
+
+    menu.TopBar.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            UIState.Dragging = false
+        end
+    end)
+
+    -- Drag Logic
+    UserInputService.InputChanged:Connect(function(input, gameProcessed)
+        if UIState.Dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local mouse = UserInputService:GetMouseLocation()
+            local pos = Vector2.new(mouse.X + UIState.DragOffset.X, mouse.Y + UIState.DragOffset.Y)
+            menu.Frame.Position = UDim2.new(0, pos.X, 0, pos.Y)
+        end
+    end)
+end
+
+-- == FEATURE: UI MENU CREATION & SETUP ==
+local function setupMenu()
+    local menu = createMenu()
+    setupTabSwitching(menu)
+    return menu
+end
+
+-- == FEATURE: COMBAT MODULE ==
+local function setupCombat(menu)
+    local tab = menu.Tabs.Combat
+    local content = menu.ContentArea
+
+    -- Aimbot Settings
+    local aimbotGroup = createUIElement("Frame", content, {
+        Name = "AimbotGroup",
+        Size = UDim2.new(1, 0, 0, 180),
+        Position = UDim2.new(0, 0, 0, 0),
+        BackgroundColor3 = Color3.fromRGB(20, 20, 35),
+        BackgroundTransparency = 0.8,
+        BorderColor3 = Color3.fromRGB(40, 30, 70),
+        BorderThickness = 1,
+        ZIndex = 10,
+    })
+
+    local aimbotLabel = createUIElement("TextLabel", aimbotGroup, {
+        Name = "Label",
+        Size = UDim2.new(1, 0, 0, 30),
+        Position = UDim2.new(0, 10, 0, 0),
+        BackgroundTransparency = 1,
+        Text = "Aimbot",
+        TextColor3 = Color3.fromRGB(200, 255, 255),
+        TextSize = 18,
+        Font = Enum.Font.GothamBold,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+
+    -- FOV Slider
+    local fovSlider = createUIElement("Frame", aimbotGroup, {
+        Name = "FOVSlider",
+        Size = UDim2.new(1, 0, 0, 40),
+        Position = UDim2.new(0, 10, 0, 40),
+        BackgroundColor3 = Color3.fromRGB(25, 20, 40),
+        BackgroundTransparency = 0.8,
+        BorderColor3 = Color3.fromRGB(45, 35, 75),
+        BorderThickness = 1,
+        ZIndex = 10,
+    })
+
+    local fovText = createUIElement("TextLabel", fovSlider, {
+        Name = "Text",
+        Size = UDim2.new(0, 100, 1, 0),
+        Position = UDim2.new(0, 10, 0, 0),
+        BackgroundTransparency = 1,
+        Text = "FOV:",
+        TextColor3 = Color3.fromRGB(180, 230, 255),
+        TextSize = 14,
+        Font = Enum.Font.GothamMedium,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+
+    local fovValue = createUIElement("TextLabel", fovSlider, {
+        Name = "Value",
+        Size = UDim2.new(0, 50, 1, 0),
+        Position = UDim2.new(1, -60, 0, 0),
+        BackgroundTransparency = 1,
+        Text = tostring(CONFIG.AimbotFOV),
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        TextSize = 14,
+        Font = Enum.Font.GothamBold,
+        TextXAlignment = Enum.TextXAlignment.Right,
+    })
+
+    local fovBar = createUIElement("Frame", fovSlider, {
+        Name = "Bar",
+        Size = UDim2.new(1, -120, 1, 0),
+        Position = UDim2.new(0, 110, 0, 0),
+        BackgroundColor3 = Color3.fromRGB(30, 30, 60),
+        BackgroundTransparency = 0,
+        BorderColor3 = Color3.fromRGB(50, 40, 90),
+        BorderThickness = 1,
+    })
+
+    local fovFill = createUIElement("Frame", fovBar, {
+        Name = "Fill",
+        Size = UDim2.new(0, 0, 1, 0),
+        BackgroundColor3 = Color3.fromRGB(0, 200, 255),
+        BackgroundTransparency = 0,
+        BorderColor3 = Color3.fromRGB(0, 200, 255),
+        BorderThickness = 1,
+    })
+
+    -- Smoothness Slider
+    local smoothSlider = createUIElement("Frame", aimbotGroup, {
+        Name = "SmoothnessSlider",
+        Size = UDim2.new(1, 0, 0, 40),
+        Position = UDim2.new(0, 10, 0, 90),
+        BackgroundColor3 = Color3.fromRGB(25, 20, 40),
+        BackgroundTransparency = 0.8,
+        BorderColor3 = Color3.fromRGB(45, 35, 75),
+        BorderThickness = 1,
+        ZIndex = 10,
+    })
+
+    local smoothText = createUIElement("TextLabel", smoothSlider, {
+        Name = "Text",
+        Size = UDim2.new(0, 100, 1, 0),
+        Position = UDim2.new(0, 10, 0, 0),
+        BackgroundTransparency = 1,
+        Text = "Smoothness:",
+        TextColor3 = Color3.fromRGB(180, 230, 255),
+        TextSize = 14,
+        Font = Enum.Font.GothamMedium,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+
+    local smoothValue = createUIElement("TextLabel", smoothSlider, {
+        Name = "Value",
+        Size = UDim2.new(0, 50, 1, 0),
+        Position = UDim2.new(1, -60, 0, 0),
+        BackgroundTransparency = 1,
+        Text = string.format("%.2f", CONFIG.AimbotSmoothness),
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        TextSize = 14,
+        Font = Enum.Font.GothamBold,
+        TextXAlignment = Enum.TextXAlignment.Right,
+    })
+
+    local smoothBar = createUIElement("Frame", smoothSlider, {
+        Name = "Bar",
+        Size = UDim2.new(1, -120, 1, 0),
+        Position = UDim2.new(0, 110, 0, 0),
+        BackgroundColor3 = Color3.fromRGB(30, 30, 60),
+        BackgroundTransparency = 0,
+        BorderColor3 = Color3.fromRGB(50, 40, 90),
+        BorderThickness = 1,
+    })
+
+    local smoothFill = createUIElement("Frame", smoothBar, {
+        Name = "Fill",
+        Size = UDim2.new(0, 0, 1, 0),
+        BackgroundColor3 = Color3.fromRGB(0, 200, 255),
+        BackgroundTransparency = 0,
+        BorderColor3 = Color3.fromRGB(0, 200, 255),
+        BorderThickness = 1,
+    })
+
+    -- Hitbox Selection
+    local hitboxGroup = createUIElement("Frame", aimbotGroup, {
+        Name = "HitboxGroup",
+        Size = UDim2.new(1, 0, 0, 40),
+        Position = UDim2.new(0, 10, 0, 140),
+        BackgroundColor3 = Color3.fromRGB(25, 20, 40),
+        BackgroundTransparency = 0.8,
+        BorderColor3 = Color3.fromRGB(45, 35, 75),
+        BorderThickness = 1,
+        ZIndex = 10,
+    })
+
+    local hitboxLabel = createUIElement("TextLabel", hitboxGroup, {
+        Name = "Label",
+        Size = UDim2.new(0, 120, 1, 0),
+        Position = UDim2.new(0, 10, 0, 0),
+        BackgroundTransparency = 1,
+        Text = "Hitbox:",
+        TextColor3 = Color3.fromRGB(180, 230, 255),
+        TextSize = 14,
+        Font = Enum.Font.GothamMedium,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+
+    local hitboxBtn = createUIElement("TextButton", hitboxGroup, {
+        Name = "Button",
+        Size = UDim2.new(0, 100, 1, 0),
+        Position = UDim2.new(1, -110, 0, 0),
+        BackgroundColor3 = Color3.fromRGB(30, 30, 60),
+        BackgroundTransparency = 0,
+        BorderColor3 = Color3.fromRGB(50, 40, 90),
+        BorderThickness = 1,
+        Text = CONFIG.AimbotHitbox,
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        TextSize = 14,
+        Font = Enum.Font.GothamBold,
+        TextXAlignment = Enum.TextXAlignment.Center,
+    })
+
+    -- Toggle Switches
+    local toggleGroup = createUIElement("Frame", aimbotGroup, {
+        Name = "ToggleGroup",
+        Size = UDim2.new(1, 0, 0, 120),
+        Position = UDim2.new(0, 10, 0, 180),
+        BackgroundColor3 = Color3.fromRGB(20, 20, 35),
+        BackgroundTransparency = 0.8,
+        BorderColor3 = Color3.fromRGB(40, 30, 70),
+        BorderThickness = 1,
+        ZIndex = 10,
+    })
+
+    local silentAimToggle = createUIElement("TextButton", toggleGroup, {
+        Name = "SilentAim",
+        Size = UDim2.new(1, 0, 0, 40),
+        Position = UDim2.new(0, 0, 0, 0),
+        BackgroundColor3 = Color3.fromRGB(25, 20, 40),
+        BackgroundTransparency = 0.8,
+        BorderColor3 = Color3.fromRGB(45, 35, 75),
+        BorderThickness = 1,
+        Text = "Silent Aim",
+        TextColor3 = Color3.fromRGB(200, 255, 255),
+        TextSize = 16,
+        Font = Enum.Font.GothamMedium,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+
+    local triggerbotToggle = createUIElement("TextButton", toggleGroup, {
+        Name = "Triggerbot",
+        Size = UDim2.new(1, 0, 0, 40),
+        Position = UDim2.new(0, 0, 0, 50),
+        BackgroundColor3 = Color3.fromRGB(25, 20, 40),
+        BackgroundTransparency = 0.8,
+        BorderColor3 = Color3.fromRGB(45, 35, 75),
+        BorderThickness = 1,
+        Text = "Triggerbot",
+        TextColor3 = Color3.fromRGB(200, 255, 255),
+        TextSize = 16,
+        Font = Enum.Font.GothamMedium,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+
+    local autofireToggle = createUIElement("TextButton", toggleGroup, {
+        Name = "AutoFire",
+        Size = UDim2.new(1, 0, 0, 40),
+        Position = UDim2.new(0, 0, 0, 100),
+        BackgroundColor3 = Color3.fromRGB(25, 20, 40),
+        BackgroundTransparency = 0.8,
+        BorderColor3 = Color3.fromRGB(45, 35, 75),
+        BorderThickness = 1,
+        Text = "Auto-Fire",
+        TextColor3 = Color3.fromRGB(200, 255, 255),
+        TextSize = 16,
+        Font = Enum.Font.GothamMedium,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+
+    -- Update slider values
+    local function updateSlider(slider, value, min, max, step)
+        local percent = (value - min) / (max - min)
+        slider.Fill.Size = UDim2.new(percent, 0, 1, 0)
+        slider.Value.Text = string.format("%.1f", value)
+        return percent
+    end
+
+    -- Bind sliders
+    local function bindSlider(slider, prop, min, max, step)
+        local bar = slider.Bar
+        local fill = slider.Fill
+        local value = slider.Value
+        local text = slider.Text
+
+        slider.MouseButton1Click:Connect(function()
+            local mouse = UserInputService:GetMouseLocation()
+            local localPos = mouse - bar.AbsolutePosition
+            local percent = localPos.X / bar.AbsoluteSize.X
+            local newValue = min + percent * (max - min)
+
+            -- Update value
+            local newVal = math.floor(newValue / step) * step
+            newVal = math.clamp(newVal, min, max)
+
+            updateSlider(slider, newVal, min, max, step)
+
+            -- Update config
+            CONFIG[prop] = newVal
+            UIState.DeltaTime = 0
+        end)
+
+        -- Update on drag
+        slider.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                local mouse = UserInputService:GetMouseLocation()
+                local localPos = mouse - bar.AbsolutePosition
+                local percent = localPos.X / bar.AbsoluteSize.X
+                local newValue = min + percent * (max - min)
+                local newVal = math.floor(newValue / step) * step
+                newVal = math.clamp(newVal, min, max)
+                updateSlider(slider, newVal, min, max, step)
+                CONFIG[prop] = newVal
+            end
+        end)
+    end
+
+    bindSlider(fovSlider, "AimbotFOV", 30, 200, 5)
+    bindSlider(smoothSlider, "AimbotSmoothness", 0.01, 1.0, 0.01)
+
+    -- Hitbox Toggle
+    hitboxBtn.MouseButton1Click:Connect(function()
+        local options = { "Head", "Torso", "Full" }
+        local current = table.find(options, CONFIG.AimbotHitbox)
+        local nextIndex = current % #options + 1
+        local new = options[nextIndex]
+        CONFIG.AimbotHitbox = new
+        hitboxBtn.Text = new
+        UIState.DeltaTime = 0
+    end)
+
+    -- Toggle switches
+    local function createToggle(btn, prop, value)
+        btn.MouseButton1Click:Connect(function()
+            CONFIG[prop] = not CONFIG[prop]
+            btn.TextColor3 = CONFIG[prop] and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(180, 230, 255)
+            btn.BackgroundColor3 = CONFIG[prop] and Color3.fromRGB(30, 30, 60) or Color3.fromRGB(25, 20, 40)
+            UIState.DeltaTime = 0
+        end)
+    end
+
+    createToggle(silentAimToggle, "SilentAim", CONFIG.SilentAim)
+    createToggle(triggerbotToggle, "Triggerbot", CONFIG.Triggerbot)
+    createToggle(autofireToggle, "AutoFire", CONFIG.AutoFire)
+
+    -- Return UI elements for feature
+    return {
+        FOVSlider = fovSlider,
+        SmoothnessSlider = smoothSlider,
+        HitboxButton = hitboxBtn,
+        SilentAimToggle = silentAimToggle,
+        TriggerbotToggle = triggerbotToggle,
+        AutofireToggle = autofireToggle,
+        UpdateSlider = updateSlider,
+        BindSlider = bindSlider,
+    }
+end
+
+-- == FEATURE: VISUALS MODULE ==
+local function setupVisuals(menu)
+    local tab = menu.Tabs.Visuals
+    local content = menu.ContentArea
+
+    local visualsGroup = createUIElement("Frame", content, {
+        Name = "VisualsGroup",
+        Size = UDim2.new(1, 0, 1, 0),
+        Position = UDim2.new(0, 0, 0, 0),
+        BackgroundColor3 = Color3.fromRGB(20, 20, 35),
+        BackgroundTransparency = 0.8,
+        BorderColor3 = Color3.fromRGB(40, 30, 70),
+        BorderThickness = 1,
+        ZIndex = 10,
+    })
+
+    -- ESP Settings
+    local espGroup = createUIElement("Frame", visualsGroup, {
+        Name = "ESPGroup",
+        Size = UDim2.new(1, 0, 0, 180),
+        Position = UDim2.new(0, 0, 0, 0),
+        BackgroundColor3 = Color3.fromRGB(25, 20, 40),
+        BackgroundTransparency = 0.8,
+        BorderColor3 = Color3.fromRGB(45, 35, 75),
+        BorderThickness = 1,
+        ZIndex = 10,
+    })
+
+    local espLabel = createUIElement("TextLabel", espGroup, {
+        Name = "Label",
+        Size = UDim2.new(1, 0, 0, 30),
+        Position = UDim2.new(0, 10, 0, 0),
+        BackgroundTransparency = 1,
+        Text = "Player ESP",
+        TextColor3 = Color3.fromRGB(200, 255, 255),
+        TextSize = 18,
+        Font = Enum.Font.GothamBold,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+
+    local toggleRow = createUIElement("Frame", espGroup, {
+        Name = "ToggleRow",
+        Size = UDim2.new(1, 0, 0, 40),
+        Position = UDim2.new(0, 10, 0, 40),
+        BackgroundColor3 = Color3.fromRGB(30, 30, 60),
+        BackgroundTransparency = 0.8,
+        BorderColor3 = Color3.fromRGB(50, 40, 90),
+        BorderThickness = 1,
+        ZIndex = 10,
+    })
+
+    local boxToggle = createUIElement("TextButton", toggleRow, {
+        Name = "Box",
+        Size = UDim2.new(0, 120, 1, 0),
+        Position = UDim2.new(0, 0, 0, 0),
+        BackgroundColor3 = Color3.fromRGB(25, 20, 40),
+        BackgroundTransparency = 0.8,
+        BorderColor3 = Color3.fromRGB(45, 35, 75),
+        BorderThickness = 1,
+        Text = "2D Box",
+        TextColor3 = Color3.fromRGB(200, 255, 255),
+        TextSize = 14,
+        Font = Enum.Font.GothamMedium,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+
+    local nameToggle = createUIElement("TextButton", toggleRow, {
+        Name = "Name",
+        Size = UDim2.new(0, 120, 1, 0),
+        Position = UDim2.new(1, -120, 0, 0),
+        BackgroundColor3 = Color3.fromRGB(25, 20, 40),
+        BackgroundTransparency = 0.8,
+        BorderColor3 = Color3.fromRGB(45, 35, 75),
+        BorderThickness = 1,
+        Text = "Name",
+        TextColor3 = Color3.fromRGB(200, 255, 255),
+        TextSize = 14,
+        Font = Enum.Font.GothamMedium,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+
+    local distToggle = createUIElement("TextButton", toggleRow, {
+        Name = "Distance",
+        Size = UDim2.new(0, 120, 1, 0),
+        Position = UDim2.new(0, 130, 0, 0),
+        BackgroundColor3 = Color3.fromRGB(25, 20, 40),
+        BackgroundTransparency = 0.8,
+        BorderColor3 = Color3.fromRGB(45, 35, 75),
+        BorderThickness = 1,
+        Text = "Distance",
+        TextColor3 = Color3.fromRGB(200, 255, 255),
+        TextSize = 14,
+        Font = Enum.Font.GothamMedium,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+
+    local healthToggle = createUIElement("TextButton", toggleRow, {
+        Name = "HealthBar",
+        Size = UDim2.new(0, 120, 1, 0),
+        Position = UDim2.new(1, -120, 0, 0),
+        BackgroundColor3 = Color3.fromRGB(25, 20, 40),
+        BackgroundTransparency = 0.8,
+        BorderColor3 = Color3.fromRGB(45, 35, 75),
+        BorderThickness = 1,
+        Text = "Health Bar",
+        TextColor3 = Color3.fromRGB(200, 255, 255),
+        TextSize = 14,
+        Font = Enum.Font.GothamMedium,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+
+    -- Skeleton ESP
+    local skeletonToggle = createUIElement("TextButton", espGroup, {
+        Name = "SkeletonESP",
+        Size = UDim2.new(1, 0, 0, 40),
+        Position = UDim2.new(0, 10, 0, 90),
+        BackgroundColor3 = Color3.fromRGB(25, 20, 40),
+        BackgroundTransparency = 0.8,
+        BorderColor3 = Color3.fromRGB(45, 35, 75),
+        BorderThickness = 1,
+        Text = "Skeleton ESP",
+        TextColor3 = Color3.fromRGB(200, 255, 255),
+        TextSize = 16,
+        Font = Enum.Font.GothamMedium,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+
+    -- Chams
+    local chamsToggle = createUIElement("TextButton", espGroup, {
+        Name = "Chams",
+        Size = UDim2.new(1, 0, 0, 40),
+        Position = UDim2.new(0, 10, 0, 140),
+        BackgroundColor3 = Color3.fromRGB(25, 20, 40),
+        BackgroundTransparency = 0.8,
+        BorderColor3 = Color3.fromRGB(45, 35, 75),
+        BorderThickness = 1,
+        Text = "Chams",
+        TextColor3 = Color3.fromRGB(200, 255, 255),
+        TextSize = 16,
+        Font = Enum.Font.GothamMedium,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+
+    -- Tracers
+    local tracerToggle = createUIElement("TextButton", espGroup, {
+        Name = "Tracers",
+        Size = UDim2.new(1, 0, 0, 40),
+        Position = UDim2.new(0, 10, 0, 190),
+        BackgroundColor3 = Color3.fromRGB(25, 20, 40),
+        BackgroundTransparency = 0.8,
+        BorderColor3 = Color3.fromRGB(45, 35, 75),
+        BorderThickness = 1,
+        Text = "Tracers",
+        TextColor3 = Color3.fromRGB(200, 255, 255),
+        TextSize = 16,
+        Font = Enum.Font.GothamMedium,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+
+    -- World Mods
+    local worldGroup = createUIElement("Frame", visualsGroup, {
+        Name = "WorldGroup",
+        Size = UDim2.new(1, 0, 0, 180),
+        Position = UDim2.new(0, 0, 0, 240),
+        BackgroundColor3 = Color3.fromRGB(25, 20, 40),
+        BackgroundTransparency = 0.8,
+        BorderColor3 = Color3.fromRGB(45, 35, 75),
+        BorderThickness = 1,
+        ZIndex = 10,
+    })
+
+    local worldLabel = createUIElement("TextLabel", worldGroup, {
+        Name = "Label",
+        Size = UDim2.new(1, 0, 0, 30),
+        Position = UDim2.new(0, 10, 0, 0),
+        BackgroundTransparency = 1,
+        Text = "World Mods",
+        TextColor3 = Color3.fromRGB(200, 255, 255),
+        TextSize = 18,
+        Font = Enum.Font.GothamBold,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+
+    local fullbrightToggle = createUIElement("TextButton", worldGroup, {
+        Name = "FullBright",
+        Size = UDim2.new(1, 0, 0, 40),
+        Position = UDim2.new(0, 10, 0, 40),
+        BackgroundColor3 = Color3.fromRGB(25, 20, 40),
+        BackgroundTransparency = 0.8,
+        BorderColor3 = Color3.fromRGB(45, 35, 75),
+        BorderThickness = 1,
+        Text = "Full Bright",
+        TextColor3 = Color3.fromRGB(200, 255, 255),
+        TextSize = 16,
+        Font = Enum.Font.GothamMedium,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+
+    local clockSlider = createUIElement("Frame", worldGroup, {
+        Name = "ClockSlider",
+        Size = UDim2.new(1, 0, 0, 40),
+        Position = UDim2.new(0, 10, 0, 90),
+        BackgroundColor3 = Color3.fromRGB(30, 30, 60),
+        BackgroundTransparency = 0.8,
+        BorderColor3 = Color3.fromRGB(50, 40, 90),
+        BorderThickness = 1,
+    })
+
+    local clockText = createUIElement("TextLabel", clockSlider, {
+        Name = "Text",
+        Size = UDim2.new(0, 100, 1, 0),
+        Position = UDim2.new(0, 10, 0, 0),
+        BackgroundTransparency = 1,
+        Text = "Clock:",
+        TextColor3 = Color3.fromRGB(180, 230, 255),
+        TextSize = 14,
+        Font = Enum.Font.GothamMedium,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+
+    local clockValue = createUIElement("TextLabel", clockSlider, {
+        Name = "Value",
+        Size = UDim2.new(0, 50, 1, 0),
+        Position = UDim2.new(1, -60, 0, 0),
+        BackgroundTransparency = 1,
+        Text = tostring(CONFIG.WorldMods.ClockTime),
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        TextSize = 14,
+        Font = Enum.Font.GothamBold,
+        TextXAlignment = Enum.TextXAlignment.Right,
+    })
+
+    local clockBar = createUIElement("Frame", clockSlider, {
+        Name = "Bar",
+        Size = UDim2.new(1, -120, 1, 0),
+        Position = UDim2.new(0, 110, 0, 0),
+        BackgroundColor3 = Color3.fromRGB(30, 30, 60),
+        BackgroundTransparency = 0,
+        BorderColor3 = Color3.fromRGB(50, 40, 90),
+        BorderThickness = 1,
+    })
+
+    local clockFill = createUIElement("Frame", clockBar, {
+        Name = "Fill",
+        Size = UDim2.new(0, 0, 1, 0),
+        BackgroundColor3 = Color3.fromRGB(0, 200, 255),
+        BackgroundTransparency = 0,
+        BorderColor3 = Color3.fromRGB(0, 200, 255),
+        BorderThickness = 1,
+    })
+
+    local fogToggle = createUIElement("TextButton", worldGroup, {
+        Name = "NoFog",
+        Size = UDim2.new(1, 0, 0, 40),
+        Position = UDim2.new(0, 10, 0, 140),
+        BackgroundColor3 = Color3.fromRGB(25, 20, 40),
+        BackgroundTransparency = 0.8,
+        BorderColor3 = Color3.fromRGB(45, 35, 75),
+        BorderThickness = 1,
+        Text = "No Fog",
+        TextColor3 = Color3.fromRGB(200, 255, 255),
+        TextSize = 16,
+        Font = Enum.Font.GothamMedium,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+
+    -- Toggle Logic
+    local function createToggle(btn, prop, value)
+        btn.MouseButton1Click:Connect(function()
+            CONFIG[prop] = not CONFIG[prop]
+            btn.TextColor3 = CONFIG[prop] and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(180, 230, 255)
+            btn.BackgroundColor3 = CONFIG[prop] and Color3.fromRGB(30, 30, 60) or Color3.fromRGB(25, 20, 40)
+            UIState.DeltaTime = 0
+        end)
+    end
+
+    createToggle(boxToggle, "ESP2DBox", CONFIG.ESP2DBox)
+    createToggle(nameToggle, "ESPName", CONFIG.ESPName)
+    createToggle(distToggle, "ESPDistance", CONFIG.ESPDistance)
+    createToggle(healthToggle, "ESPHealthBar", CONFIG.ESPHealthBar)
+    createToggle(skeletonToggle, "SkeletonESP", CONFIG.SkeletonESP)
+    createToggle(chamsToggle, "ChamsEnabled", CONFIG.ChamsEnabled)
+    createToggle(tracerToggle, "TracerEnabled", CONFIG.TracerEnabled)
+    createToggle(fullbrightToggle, "WorldMods.FullBright", CONFIG.WorldMods.FullBright)
+    createToggle(fogToggle, "WorldMods.NoFog", CONFIG.WorldMods.NoFog)
+
+    -- Clock Slider
+    local function bindClockSlider()
+        local bar = clockBar
+        local fill = clockFill
+        local value = clockValue
+        local text = clockText
+
+        clockSlider.MouseButton1Click:Connect(function()
+            local mouse = UserInputService:GetMouseLocation()
+            local localPos = mouse - bar.AbsolutePosition
+            local percent = localPos.X / bar.AbsoluteSize.X
+            local newTime = math.floor(percent * 24)
+            newTime = math.clamp(newTime, 0, 23)
+
+            fill.Size = UDim2.new(percent, 0, 1, 0)
+            value.Text = tostring(newTime)
+            CONFIG.WorldMods.ClockTime = newTime
+            UIState.DeltaTime = 0
+        end)
+
+        clockSlider.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                local mouse = UserInputService:GetMouseLocation()
+                local localPos = mouse - bar.AbsolutePosition
+                local percent = localPos.X / bar.AbsoluteSize.X
+                local newTime = math.floor(percent * 24)
+                newTime = math.clamp(newTime, 0, 23)
+                fill.Size = UDim2.new(percent, 0, 1, 0)
+                value.Text = tostring(newTime)
+                CONFIG.WorldMods.ClockTime = newTime
+            end
+        end)
+    end
+
+    bindClockSlider()
+
+    return {
+        ESPGroup = espGroup,
+        WorldGroup = worldGroup,
+        UpdateClockSlider = bindClockSlider,
+    }
+end
+
+-- == FEATURE: MOVEMENT MODULE ==
+local function setupMovement(menu)
+    local tab = menu.Tabs.Movement
+    local content = menu.ContentArea
+
+    local movementGroup = createUIElement("Frame", content, {
+        Name = "MovementGroup",
+        Size = UDim2.new(1, 0, 1, 0),
+        Position = UDim2.new(0, 0, 0, 0),
+        BackgroundColor3 = Color3.fromRGB(20, 20, 35),
+        BackgroundTransparency = 0.8,
+        BorderColor3 = Color3.fromRGB(40, 30, 70),
+        BorderThickness = 1,
+        ZIndex = 10,
+    })
+
+    -- WalkSpeed
+    local walkSpeedSlider = createUIElement("Frame", movementGroup, {
+        Name = "WalkSpeedSlider",
+        Size = UDim2.new(1, 0, 0, 40),
+        Position = UDim2.new(0, 10, 0, 0),
+        BackgroundColor3 = Color3.fromRGB(25, 20, 40),
+        BackgroundTransparency = 0.8,
+        BorderColor3 = Color3.fromRGB(45, 35, 75),
+        BorderThickness = 1,
+        ZIndex = 10,
+    })
+
+    local walkText = createUIElement("TextLabel", walkSpeedSlider, {
+        Name = "Text",
+        Size = UDim2.new(0, 100, 1, 0),
+        Position = UDim2.new(0, 10, 0, 0),
+        BackgroundTransparency = 1,
+        Text = "WalkSpeed:",
+        TextColor3 = Color3.fromRGB(180, 230, 255),
+        TextSize = 14,
+        Font = Enum.Font.GothamMedium,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+
+    local walkValue = createUIElement("TextLabel", walkSpeedSlider, {
+        Name = "Value",
+        Size = UDim2.new(0, 50, 1, 0),
+        Position = UDim2.new(1, -60, 0, 0),
+        BackgroundTransparency = 1,
+        Text = tostring(CONFIG.WalkSpeed),
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        TextSize = 14,
+        Font = Enum.Font.GothamBold,
+        TextXAlignment = Enum.TextXAlignment.Right,
+    })
+
+    local walkBar = createUIElement("Frame", walkSpeedSlider, {
+        Name = "Bar",
+        Size = UDim2.new(1, -120, 1, 0),
+        Position = UDim2.new(0, 110, 0, 0),
+        BackgroundColor3 = Color3.fromRGB(30, 30, 60),
+        BackgroundTransparency = 0,
+        BorderColor3 = Color3.fromRGB(50, 40, 90),
+        BorderThickness = 1,
+    })
+
+    local walkFill = createUIElement("Frame", walkBar, {
+        Name = "Fill",
+        Size = UDim2.new(0, 0, 1, 0),
+        BackgroundColor3 = Color3.fromRGB(0, 200, 255),
+        BackgroundTransparency = 0,
+        BorderColor3 = Color3.fromRGB(0, 200, 255),
+        BorderThickness = 1,
+    })
+
+    -- JumpPower
+    local jumpPowerSlider = createUIElement("Frame", movementGroup, {
+        Name = "JumpPowerSlider",
+        Size = UDim2.new(1, 0, 0, 40),
+        Position = UDim2.new(0, 10, 0, 50),
+        BackgroundColor3 = Color3.fromRGB(25, 20, 40),
+        BackgroundTransparency = 0.8,
+        BorderColor3 = Color3.fromRGB(45, 35, 75),
+        BorderThickness = 1,
+        ZIndex = 10,
+    })
+
+    local jumpText = createUIElement("TextLabel", jumpPowerSlider, {
+        Name = "Text",
+        Size = UDim2.new(0, 100, 1, 0),
+        Position = UDim2.new(0, 10, 0, 0),
+        BackgroundTransparency = 1,
+        Text = "JumpPower:",
+        TextColor3 = Color3.fromRGB(180, 230, 255),
+        TextSize = 14,
+        Font = Enum.Font.GothamMedium,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+
+    local jumpValue = createUIElement("TextLabel", jumpPowerSlider, {
+        Name = "Value",
+        Size = UDim2.new(0, 50, 1, 0),
+        Position = UDim2.new(1, -60, 0, 0),
+        BackgroundTransparency = 1,
+        Text = tostring(CONFIG.JumpPower),
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        TextSize = 14,
+        Font = Enum.Font.GothamBold,
+        TextXAlignment = Enum.TextXAlignment.Right,
+    })
+
+    local jumpBar = createUIElement("Frame", jumpPowerSlider, {
+        Name = "Bar",
+        Size = UDim2.new(1, -120, 1, 0),
+        Position = UDim2.new(0, 110, 0, 0),
+        BackgroundColor3 = Color3.fromRGB(30, 30, 60),
+        BackgroundTransparency = 0,
+        BorderColor3 = Color3.fromRGB(50, 40, 90),
+        BorderThickness = 1,
+    })
+
+    local jumpFill = createUIElement("Frame", jumpBar, {
+        Name = "Fill",
+        Size = UDim2.new(0, 0, 1, 0),
+        BackgroundColor3 = Color3.fromRGB(0, 200, 255),
+        BackgroundTransparency = 0,
+        BorderColor3 = Color3.fromRGB(0, 200, 255),
+        BorderThickness = 1,
+    })
+
+    -- Fly
+    local flyGroup = createUIElement("Frame", movementGroup, {
+        Name = "FlyGroup",
+        Size = UDim2.new(1, 0, 0, 180),
+        Position = UDim2.new(0, 10, 0, 100),
+        BackgroundColor3 = Color3.fromRGB(25, 20, 40),
+        BackgroundTransparency = 0.8,
+        BorderColor3 = Color3.fromRGB(45, 35, 75),
+        BorderThickness = 1,
+        ZIndex = 10,
+    })
+
+    local flyLabel = createUIElement("TextLabel", flyGroup, {
+        Name = "Label",
+        Size = UDim2.new(1, 0, 0, 30),
+        Position = UDim2.new(0, 10, 0, 0),
+        BackgroundTransparency = 1,
+        Text = "Fly",
+        TextColor3 = Color3.fromRGB(200, 255, 255),
+        TextSize = 18,
+        Font = Enum.Font.GothamBold,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+
+    local flySpeedSlider = createUIElement("Frame", flyGroup, {
+        Name = "FlySpeedSlider",
+        Size = UDim2.new(1, 0, 0, 40),
+        Position = UDim2.new(0, 10, 0, 40),
+        BackgroundColor3 = Color3.fromRGB(30, 30, 60),
+        BackgroundTransparency = 0.8,
+        BorderColor3 = Color3.fromRGB(50, 40, 90),
+        BorderThickness = 1,
+    })
+
+    local flyText = createUIElement("TextLabel", flySpeedSlider, {
+        Name = "Text",
+        Size = UDim2.new(0, 100, 1, 0),
+        Position = UDim2.new(0, 10, 0, 0),
+        BackgroundTransparency = 1,
+        Text = "Speed:",
+        TextColor3 = Color3.fromRGB(180, 230, 255),
+        TextSize = 14,
+        Font = Enum.Font.GothamMedium,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+
+    local flyValue = createUIElement("TextLabel", flySpeedSlider, {
+        Name = "Value",
+        Size = UDim2.new(0, 50, 1, 0),
+        Position = UDim2.new(1, -60, 0, 0),
+        BackgroundTransparency = 1,
+        Text = tostring(CONFIG.FlySpeed),
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        TextSize = 14,
+        Font = Enum.Font.GothamBold,
+        TextXAlignment = Enum.TextXAlignment.Right,
+    })
+
+    local flyBar = createUIElement("Frame", flySpeedSlider, {
+        Name = "Bar",
+        Size = UDim2.new(1, -120, 1, 0),
+        Position = UDim2.new(0, 110, 0, 0),
+        BackgroundColor3 = Color3.fromRGB(30, 30, 60),
+        BackgroundTransparency = 0,
+        BorderColor3 = Color3.fromRGB(50, 40, 90),
+        BorderThickness = 1,
+    })
+
+    local flyFill = createUIElement("Frame", flyBar, {
+        Name = "Fill",
+        Size = UDim2.new(0, 0, 1, 0),
+        BackgroundColor3 = Color3.fromRGB(0, 200, 255),
+        BackgroundTransparency = 0,
+        BorderColor3 = Color3.fromRGB(0, 200, 255),
+        BorderThickness = 1,
+    })
+
+    -- Toggle Switches
+    local toggleGroup = createUIElement("Frame", movementGroup, {
+        Name = "ToggleGroup",
+        Size = UDim2.new(1, 0, 0, 120),
+        Position = UDim2.new(0, 10, 0, 290),
+        BackgroundColor3 = Color3.fromRGB(20, 20, 35),
+        BackgroundTransparency = 0.8,
+        BorderColor3 = Color3.fromRGB(40, 30, 70),
+        BorderThickness = 1,
+        ZIndex = 10,
+    })
+
+    local noclipToggle = createUIElement("TextButton", toggleGroup, {
+        Name = "Noclip",
+        Size = UDim2.new(1, 0, 0, 40),
+        Position = UDim2.new(0, 0, 0, 0),
+        BackgroundColor3 = Color3.fromRGB(25, 20, 40),
+        BackgroundTransparency = 0.8,
+        BorderColor3 = Color3.fromRGB(45, 35, 75),
+        BorderThickness = 1,
+        Text = "Noclip",
+        TextColor3 = Color3.fromRGB(200, 255, 255),
+        TextSize = 16,
+        Font = Enum.Font.GothamMedium,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+
+    local infiniteJumpToggle = createUIElement("TextButton", toggleGroup, {
+        Name = "InfiniteJump",
+        Size = UDim2.new(1, 0, 0, 40),
+        Position = UDim2.new(0, 0, 0, 50),
+        BackgroundColor3 = Color3.fromRGB(25, 20, 40),
+        BackgroundTransparency = 0.8,
+        BorderColor3 = Color3.fromRGB(45, 35, 75),
+        BorderThickness = 1,
+        Text = "Infinite Jump",
+        TextColor3 = Color3.fromRGB(200, 255, 255),
+        TextSize = 16,
+        Font = Enum.Font.GothamMedium,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+
+    -- Bind Sliders
+    local function bindSlider(slider, prop, min, max, step)
+        local bar = slider.Bar
+        local fill = slider.Fill
+        local value = slider.Value
+        local text = slider.Text
+
+        slider.MouseButton1Click:Connect(function()
+            local mouse = UserInputService:GetMouseLocation()
+            local localPos = mouse - bar.AbsolutePosition
+            local percent = localPos.X / bar.AbsoluteSize.X
+            local newValue = min + percent * (max - min)
+            local newVal = math.floor(newValue / step) * step
+            newVal = math.clamp(newVal, min, max)
+
+            fill.Size = UDim2.new(percent, 0, 1, 0)
+            value.Text = string.format("%.1f", newVal)
+            CONFIG[prop] = newVal
+            UIState.DeltaTime = 0
+        end)
+
+        slider.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                local mouse = UserInputService:GetMouseLocation()
+                local localPos = mouse - bar.AbsolutePosition
+                local percent = localPos.X / bar.AbsoluteSize.X
+                local newValue = min + percent * (max - min)
+                local newVal = math.floor(newValue / step) * step
+                newVal = math.clamp(newVal, min, max)
+                fill.Size = UDim2.new(percent, 0, 1, 0)
+                value.Text = string.format("%.1f", newVal)
+                CONFIG[prop] = newVal
+            end
+        end)
+    end
+
+    bindSlider(walkSpeedSlider, "WalkSpeed", 1, 50, 1)
+    bindSlider(jumpPowerSlider, "JumpPower", 10, 100, 5)
+    bindSlider(flySpeedSlider, "FlySpeed", 1, 30, 0.5)
+
+    -- Toggle Logic
+    local function createToggle(btn, prop, value)
+        btn.MouseButton1Click:Connect(function()
+            CONFIG[prop] = not CONFIG[prop]
+            btn.TextColor3 = CONFIG[prop] and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(180, 230, 255)
+            btn.BackgroundColor3 = CONFIG[prop] and Color3.fromRGB(30, 30, 60) or Color3.fromRGB(25, 20, 40)
+            UIState.DeltaTime = 0
+        end)
+    end
+
+    createToggle(noclipToggle, "NoclipEnabled", CONFIG.NoclipEnabled)
+    createToggle(infiniteJumpToggle, "InfiniteJump", CONFIG.InfiniteJump)
+
+    return {
+        WalkSpeedSlider = walkSpeedSlider,
+        JumpPowerSlider = jumpPowerSlider,
+        FlySpeedSlider = flySpeedSlider,
+        NoclipToggle = noclipToggle,
+        InfiniteJumpToggle = infiniteJumpToggle,
+    }
+end
+
+-- == FEATURE: MISC MODULE ==
+local function setupMisc(menu)
+    local tab = menu.Tabs.Settings
+    local content = menu.ContentArea
+
+    local miscGroup = createUIElement("Frame", content, {
+        Name = "MiscGroup",
+        Size = UDim2.new(1, 0, 1, 0),
+        Position = UDim2.new(0, 0, 0, 0),
+        BackgroundColor3 = Color3.fromRGB(20, 20, 35),
+        BackgroundTransparency = 0.8,
+        BorderColor3 = Color3.fromRGB(40, 30, 70),
+        BorderThickness = 1,
+        ZIndex = 10,
+    })
+
+    local afkToggle = createUIElement("TextButton", miscGroup, {
+        Name = "AntiAFK",
+        Size = UDim2.new(1, 0, 0, 40),
+        Position = UDim2.new(0, 10, 0, 0),
+        BackgroundColor3 = Color3.fromRGB(25, 20, 40),
+        BackgroundTransparency = 0.8,
+        BorderColor3 = Color3.fromRGB(45, 35, 75),
+        BorderThickness = 1,
+        Text = "Anti-AFK",
+        TextColor3 = Color3.fromRGB(200, 255, 255),
+        TextSize = 16,
+        Font = Enum.Font.GothamMedium,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+
+    local afkIntervalSlider = createUIElement("Frame", miscGroup, {
+        Name = "AFKIntervalSlider",
+        Size = UDim2.new(1, 0, 0, 40),
+        Position = UDim2.new(0, 10, 0, 50),
+        BackgroundColor3 = Color3.fromRGB(30, 30, 60),
+        BackgroundTransparency = 0.8,
+        BorderColor3 = Color3.fromRGB(50, 40, 90),
+        BorderThickness = 1,
+    })
+
+    local afkText = createUIElement("TextLabel", afkIntervalSlider, {
+        Name = "Text",
+        Size = UDim2.new(0, 100, 1, 0),
+        Position = UDim2.new(0, 10, 0, 0),
+        BackgroundTransparency = 1,
+        Text = "Interval (s):",
+        TextColor3 = Color3.fromRGB(180, 230, 255),
+        TextSize = 14,
+        Font = Enum.Font.GothamMedium,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+
+    local afkValue = createUIElement("TextLabel", afkIntervalSlider, {
+        Name = "Value",
+        Size = UDim2.new(0, 50, 1, 0),
+        Position = UDim2.new(1, -60, 0, 0),
+        BackgroundTransparency = 1,
+        Text = tostring(CONFIG.AFKInterval),
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        TextSize = 14,
+        Font = Enum.Font.GothamBold,
+        TextXAlignment = Enum.TextXAlignment.Right,
+    })
+
+    local afkBar = createUIElement("Frame", afkIntervalSlider, {
+        Name = "Bar",
+        Size = UDim2.new(1, -120, 1, 0),
+        Position = UDim2.new(0, 110, 0, 0),
+        BackgroundColor3 = Color3.fromRGB(30, 30, 60),
+        BackgroundTransparency = 0,
+        BorderColor3 = Color3.fromRGB(50, 40, 90),
+        BorderThickness = 1,
+    })
+
+    local afkFill = createUIElement("Frame", afkBar, {
+        Name = "Fill",
+        Size = UDim2.new(0, 0, 1, 0),
+        BackgroundColor3 = Color3.fromRGB(0, 200, 255),
+        BackgroundTransparency = 0,
+        BorderColor3 = Color3.fromRGB(0, 200, 255),
+        BorderThickness = 1,
+    })
+
+    local uiKeyToggle = createUIElement("TextButton", miscGroup, {
+        Name = "UIKey",
+        Size = UDim2.new(1, 0, 0, 40),
+        Position = UDim2.new(0, 10, 0, 100),
+        BackgroundColor3 = Color3.fromRGB(25, 20, 40),
+        BackgroundTransparency = 0.8,
+        BorderColor3 = Color3.fromRGB(45, 35, 75),
+        BorderThickness = 1,
+        Text = "Custom UI Toggle Key",
+        TextColor3 = Color3.fromRGB(200, 255, 255),
+        TextSize = 16,
+        Font = Enum.Font.GothamMedium,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+
+    -- Toggle Logic
+    local function createToggle(btn, prop, value)
+        btn.MouseButton1Click:Connect(function()
+            CONFIG[prop] = not CONFIG[prop]
+            btn.TextColor3 = CONFIG[prop] and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(180, 230, 255)
+            btn.BackgroundColor3 = CONFIG[prop] and Color3.fromRGB(30, 30, 60) or Color3.fromRGB(25, 20, 40)
+            UIState.DeltaTime = 0
+        end)
+    end
+
+    createToggle(afkToggle, "AntiAFK", CONFIG.AntiAFK)
+    createToggle(uiKeyToggle, "UIKey", CONFIG.UIKey)
+
+    -- Bind AFK Interval Slider
+    local function bindAFKSlider()
+        local bar = afkBar
+        local fill = afkFill
+        local value = afkValue
+        local text = afkText
+
+        afkIntervalSlider.MouseButton1Click:Connect(function()
+            local mouse = UserInputService:GetMouseLocation()
+            local localPos = mouse - bar.AbsolutePosition
+            local percent = localPos.X / bar.AbsoluteSize.X
+            local newInterval = math.floor(percent * 300) + 1
+            newInterval = math.clamp(newInterval, 1, 300)
+
+            fill.Size = UDim2.new(percent, 0, 1, 0)
+            value.Text = tostring(newInterval)
+            CONFIG.AFKInterval = newInterval
+            UIState.DeltaTime = 0
+        end)
+
+        afkIntervalSlider.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                local mouse = UserInputService:GetMouseLocation()
+                local localPos = mouse - bar.AbsolutePosition
+                local percent = localPos.X / bar.AbsoluteSize.X
+                local newInterval = math.floor(percent * 300) + 1
+                newInterval = math.clamp(newInterval, 1, 300)
+                fill.Size = UDim2.new(percent, 0, 1, 0)
+                value.Text = tostring(newInterval)
+                CONFIG.AFKInterval = newInterval
+            end
+        end)
+    end
+
+    bindAFKSlider()
+
+    return {
+        AFKIntervalSlider = afkIntervalSlider,
+        UIKeyToggle = uiKeyToggle,
+        BindAFKSlider = bindAFKSlider,
+    }
+end
+
+-- == RENDER LOOP (RenderStepped) ==
+local function setupRenderLoop()
+    local lastTime = tick()
+
+    RunService.RenderStepped:Connect(function(dt)
+        UIState.DeltaTime += dt
+
+        -- Mouse Position
+        UIState.Mouse = UserInputService:GetMouseLocation()
+
+        -- Update DrawingImmediate
+        local function updateDrawing(drawing, props)
+            for k, v in pairs(props) do
+                drawing[k] = v
+            end
+            return drawing
+        end
+
+        -- Aimbot FOV Circle
+        local fovCircle = UIState.DrawingCache.fovCircle
+        if fovCircle then
+            fovCircle.Position = camera:WorldToViewportPoint(player.Character.HumanoidRootPart.Position)
+            fovCircle.Radius = CONFIG.AimbotFOV
+            fovCircle.Color = Color3.fromRGB(0, 200, 255)
+            fovCircle.Thickness = 2
+            fovCircle.Filled = false
+            fovCircle.Alpha = 0.7
+        end
+
+        -- ESP
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= player and player.Character then
+                local root = player.Character:FindFirstChild("HumanoidRootPart")
+                if root then
+                    local pos = camera:WorldToViewportPoint(root.Position)
+                    local size = Vector2.new(100, 100) -- Example size
+                    local x, y = pos.X, pos.Y
+                    local w, h = size.X, size.Y
+
+                    -- 2D Box
+                    if CONFIG.ESP2DBox then
+                        local box = UIState.DrawingCache["box_" .. player.UserId]
+                        if not box then
+                            box = createDrawing("Line", {
+                                From = Vector2.new(x - w/2, y - h/2),
+                                To = Vector2.new(x + w/2, y - h/2),
+                                Color = Color3.fromRGB(200, 255, 255),
+                                Thickness = 2,
+                                Transparency = 0,
+                            })
+                            table.insert(UIState.DrawingCache, box)
+                            UIState.DrawingCache["box_" .. player.UserId] = box
+                        else
+                            box.From = Vector2.new(x - w/2, y - h/2)
+                            box.To = Vector2.new(x + w/2, y - h/2)
+                            box.Color = Color3.fromRGB(200, 255, 255)
+                            box.Thickness = 2
+                        end
+
+                        -- Top to bottom
+                        local line1 = createDrawing("Line", {
+                            From = Vector2.new(x + w/2, y - h/2),
+                            To = Vector2.new(x + w/2, y + h/2),
+                            Color = Color3.fromRGB(200, 255, 255),
+                            Thickness = 2,
+                            Transparency = 0,
+                        })
+                        table.insert(UIState.DrawingCache, line1)
+
+                        -- Bottom to left
+                        local line2 = createDrawing("Line", {
+                            From = Vector2.new(x + w/2, y + h/2),
+                            To = Vector2.new(x - w/2, y + h/2),
+                            Color = Color3.fromRGB(200, 255, 255),
+                            Thickness = 2,
+                            Transparency = 0,
+                        })
+                        table.insert(UIState.DrawingCache, line2)
+
+                        -- Left to top
+                        local line3 = createDrawing("Line", {
+                            From = Vector2.new(x - w/2, y + h/2),
+                            To = Vector2.new(x - w/2, y - h/2),
+                            Color = Color3.fromRGB(200, 255, 255),
+                            Thickness = 2,
+                            Transparency = 0,
+                        })
+                        table.insert(UIState.DrawingCache, line3)
+                    end
+
+                    -- Name
+                    if CONFIG.ESPName then
+                        local name = UIState.DrawingCache["name_" .. player.UserId]
+                        if not name then
+                            name = createDrawing("Text", {
+                                Text = player.Name,
+                                Size = 14,
+                                Color = Color3.fromRGB(255, 255, 255),
+                                OutlineColor = Color3.fromRGB(0, 0, 0),
+                                Outline = true,
+                                Position = Vector2.new(x - w/2, y - h/2 - 15),
+                            })
+                            UIState.DrawingCache["name_" .. player.UserId] = name
+                        else
+                            name.Text = player.Name
+                            name.Position = Vector2.new(x - w/2, y - h/2 - 15)
+                        end
+                    end
+
+                    -- Distance
+                    if CONFIG.ESPDistance then
+                        local dist = UIState.DrawingCache["dist_" .. player.UserId]
+                        if not dist then
+                            dist = createDrawing("Text", {
+                                Text = string.format("%.1f", (root.Position - player.Character.HumanoidRootPart.Position).Magnitude),
+                                Size = 12,
+                                Color = Color3.fromRGB(180, 230, 255),
+                                OutlineColor = Color3.fromRGB(0, 0, 0),
+                                Outline = true,
+                                Position = Vector2.new(x - w/2, y + h/2 + 5),
+                            })
+                            UIState.DrawingCache["dist_" .. player.UserId] = dist
+                        else
+                            dist.Text = string.format("%.1f", (root.Position - player.Character.HumanoidRootPart.Position).Magnitude)
+                            dist.Position = Vector2.new(x - w/2, y + h/2 + 5)
+                        end
+                    end
+
+                    -- Health Bar
+                    if CONFIG.ESPHealthBar then
+                        local health = UIState.DrawingCache["health_" .. player.UserId]
+                        if not health then
+                            health = createDrawing("Frame", {
+                                Position = Vector2.new(x - w/2, y - h/2 - 20),
+                                Size = Vector2.new(w, 5),
+                                BackgroundColor = Color3.fromRGB(30, 30, 60),
+                                BorderColor = Color3.fromRGB(100, 100, 140),
+                                BorderThickness = 1,
+                            })
+                            UIState.DrawingCache["health_" .. player.UserId] = health
+                        else
+                            health.Position = Vector2.new(x - w/2, y - h/2 - 20)
+                            health.Size = Vector2.new(w, 5)
+                        end
+
+                        local bar = UIState.DrawingCache["healthBar_" .. player.UserId]
+                        if not bar then
+                            bar = createDrawing("Frame", {
+                                Position = Vector2.new(x - w/2, y - h/2 - 20),
+                                Size = Vector2.new(w * (player.Character.Humanoid.Health / player.Character.Humanoid.MaxHealth), 5),
+                                BackgroundColor = Color3.fromRGB(0, 200, 255),
+                                BorderColor = Color3.fromRGB(0, 200, 255),
+                                BorderThickness = 1,
+                            })
+                            UIState.DrawingCache["healthBar_" .. player.UserId] = bar
+                        else
+                            bar.Size = Vector2.new(w * (player.Character.Humanoid.Health / player.Character.Humanoid.MaxHealth), 5)
+                        end
+                    end
+                end
+            end
+        end
+
+        -- Skeleton ESP
+        if CONFIG.SkeletonESP then
+            for _, player in pairs(Players:GetPlayers()) do
+                if player ~= player and player.Character then
+                    local root = player.Character:FindFirstChild("HumanoidRootPart")
+                    if root then
+                        local joints = {
+                            "Head",
+                            "Left Arm",
+                            "Right Arm",
+                            "Left Leg",
+                            "Right Leg",
+                        }
+
+                        for _, jointName in ipairs(joints) do
+                            local joint = player.Character:FindFirstChild(jointName)
+                            if joint then
+                                local jointPos = camera:WorldToViewportPoint(joint.Position)
+                                local rootPos = camera:WorldToViewportPoint(root.Position)
+
+                                local line = UIState.DrawingCache["skeleton_" .. player.UserId .. "_" .. jointName]
+                                if not line then
+                                    line = createDrawing("Line", {
+                                        From = rootPos,
+                                        To = jointPos,
+                                        Color = Color3.fromRGB(200, 255, 255),
+                                        Thickness = 2,
+                                        Transparency = 0,
+                                    })
+                                    UIState.DrawingCache["skeleton_" .. player.UserId .. "_" .. jointName] = line
+                                else
+                                    line.From = rootPos
+                                    line.To = jointPos
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        -- Chams
+        if CONFIG.ChamsEnabled then
+            for _, player in pairs(Players:GetPlayers()) do
+                if player ~= player and player.Character then
+                    local chams = UIState.DrawingCache["chams_" .. player.UserId]
+                    if not chams then
+                        chams = Instance.new("Highlight")
+                        chams.FillColor = Color3.fromRGB(0, 200, 255)
+                        chams.OutlineColor = Color3.fromRGB(0, 200, 255)
+                        chams.OutlineTransparency = 0
+                        chams.FillTransparency = 0.4
+                        chams.AlwaysOnTop = true
+                        chams.Enabled = true
+                        chams.Parent = player.Character
+                        UIState.DrawingCache["chams_" .. player.UserId] = chams
+                    else
+                        chams.FillColor = Color3.fromRGB(0, 200, 255)
+                        chams.OutlineColor = Color3.fromRGB(0, 200, 255)
+                        chams.OutlineTransparency = 0
+                        chams.FillTransparency = 0.4
+                    end
+                end
+            end
+        end
+
+        -- Tracers
+        if CONFIG.TracerEnabled then
+            for _, player in pairs(Players:GetPlayers()) do
+                if player ~= player and player.Character then
+                    local root = player.Character:FindFirstChild("HumanoidRootPart")
+                    if root then
+                        local pos = camera:WorldToViewportPoint(root.Position)
+                        local tracer = UIState.DrawingCache["tracer_" .. player.UserId]
+                        if not tracer then
+                            tracer = createDrawing("Line", {
+                                From = Vector2.new(pos.X, camera.ViewportSize.Y),
+                                To = Vector2.new(pos.X, pos.Y),
+                                Color = Color3.fromRGB(0, 200, 255),
+                                Thickness = 1,
+                                Transparency = 0.5,
+                            })
+                            UIState.DrawingCache["tracer_" .. player.UserId] = tracer
+                        else
+                            tracer.From = Vector2.new(pos.X, camera.ViewportSize.Y)
+                            tracer.To = Vector2.new(pos.X, pos.Y)
+                        end
+                    end
+                end
+            end
+        end
+
+        -- World Mods
+        if CONFIG.WorldMods.FullBright then
+            Lighting.Brightness = 5
+        else
+            Lighting.Brightness = 1
+        end
+
+        Lighting.ClockTime = CONFIG.WorldMods.ClockTime
+
+        if CONFIG.WorldMods.NoFog then
+            Lighting.FogEnd = math.huge
+            Lighting.FogStart = 0
+        else
+            Lighting.FogEnd = 100
+            Lighting.FogStart = 50
+        end
+
+        lastTime = tick()
+    end)
+end
+
+-- == HEARTBEAT LOOP (Movement, AFK, Aimbot, etc.) ==
+local function setupHeartbeatLoop()
+    local lastTick = tick()
+
+    RunService.Heartbeat:Connect(function(dt)
+        -- Movement
+        if CONFIG.WalkSpeed then
+            humanoid.WalkSpeed = CONFIG.WalkSpeed
+        end
+
+        if CONFIG.JumpPower then
+            humanoid.JumpPower = CONFIG.JumpPower
+        end
+
+        if CONFIG.FlyEnabled then
+            local bodyVelocity = character:FindFirstChild("BodyVelocity")
+            if not bodyVelocity then
+                bodyVelocity = Instance.new("BodyVelocity")
+                bodyVelocity.MaxForce = Vector3.new(9999, 9999, 9999)
+                bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+                bodyVelocity.Parent = character
+            end
+
+            local input = Vector3.new(0, 0, 0)
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then input += Vector3.new(0, 0, -1) end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then input += Vector3.new(0, 0, 1) end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then input += Vector3.new(-1, 0, 0) end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then input += Vector3.new(1, 0, 0) end
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then input += Vector3.new(0, 1, 0) end
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then input += Vector3.new(0, -1, 0) end
+
+            input = input.unit * CONFIG.FlySpeed
+            bodyVelocity.Velocity = input
+        end
+
+        if CONFIG.NoclipEnabled then
+            for _, part in ipairs(character:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = false
+                end
+            end
+        end
+
+        if CONFIG.InfiniteJump then
+            humanoid:Jump()
+            if humanoid:GetState() == Enum.HumanoidStateType.Jumping then
+                humanoid.JumpPower = CONFIG.JumpPower
+            end
+        end
+
+        -- AFK
+        if CONFIG.AntiAFK then
+            if tick() - lastTick > CONFIG.AFKInterval then
+                local mouse = UserInputService:GetMouseLocation()
+                if (mouse - UIState.LastMouse).Magnitude > CONFIG.AFKActionThreshold then
+                    UserInputService:SendMouseMoveEvent(mouse.X, mouse.Y)
+                else
+                    UserInputService:SendMouseWheelEvent(0, 0, 1)
+                end
+                lastTick = tick()
+            end
+        end
+
+        -- Aimbot
+        local closest = nil
+        local minDist = math.huge
+
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= player and player.Character then
+                local root = player.Character:FindFirstChild("HumanoidRootPart")
+                if root then
+                    local pos = camera:WorldToViewportPoint(root.Position)
+                    local dist = (pos - camera.ViewportSize / 2).Magnitude
+                    if dist < minDist and dist < CONFIG.AimbotFOV then
+                        minDist = dist
+                        closest = player
+                    end
+                end
+            end
+        end
+
+        if closest and minDist < CONFIG.AimbotFOV then
+            local target = closest.Character.HumanoidRootPart
+            local targetPos = camera:WorldToViewportPoint(target.Position)
+            local aimPos = targetPos
+
+            -- Add micro-jitter
+            aimPos += Vector2.new(math.random(-2, 2), math.random(-2, 2))
+
+            -- Smooth aim
+            local current = camera.CFrame
+            local targetCFrame = CFrame.lookAt(camera.CFrame.Position, target.Position)
+            local lerpFactor = CONFIG.AimbotSmoothness * UIState.DeltaTime
+
+            local newCFrame = current:Lerp(targetCFrame, lerpFactor)
+            camera.CFrame = newCFrame
+
+            -- Silent Aim
+            if CONFIG.SilentAim then
+                pcall(function()
+                    VirtualInputManager:SendMouseClick(Vector2.new(aimPos.X, aimPos.Y), 1)
+                end)
+            end
+
+            -- Triggerbot
+            if CONFIG.Triggerbot then
+                local target = closest.Character.HumanoidRootPart
+                local pos = camera:WorldToViewportPoint(target.Position)
+                local dist = (pos - camera.ViewportSize / 2).Magnitude
+                if dist < CONFIG.AimbotFOV then
+                    pcall(function()
+                        VirtualInputManager:SendMouseButtonEvent(1, 1, 0, 0, 0)
+                        wait(CONFIG.TriggerbotDelay)
+                        VirtualInputManager:SendMouseButtonEvent(1, 0, 0, 0, 0)
+                    end)
+                end
+            end
+
+            -- Auto-Fire
+            if CONFIG.AutoFire then
+                local target = closest.Character.HumanoidRootPart
+                local pos = camera:WorldToViewportPoint(target.Position)
+                local dist = (pos - camera.ViewportSize / 2).Magnitude
+                if dist < CONFIG.AimbotFOV then
+                    pcall(function()
+                        VirtualInputManager:SendMouseButtonEvent(1, 1, 0, 0, 0)
+                        wait(CONFIG.AutoFireDelay)
+                        VirtualInputManager:SendMouseButtonEvent(1, 0, 0, 0, 0)
+                    end)
+                end
+            end
+        end
+
+        UIState.LastMouse = UIState.Mouse
+    end)
+end
+
+-- == MAIN EXECUTION ==
+local function main()
+    -- Setup UI
+    local menu = setupMenu()
+
+    -- Setup Features
+    local combat = setupCombat(menu)
+    local visuals = setupVisuals(menu)
+    local movement = setupMovement(menu)
+    local misc = setupMisc(menu)
+
+    -- Setup Rendering & Heartbeat
+    setupRenderLoop()
+    setupHeartbeatLoop()
+
+    -- Initial UI Setup
+    menu.Frame.Visible = true
+    UIState.MenuOpen = true
+
+    -- Toggle Menu
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if input.KeyCode == CONFIG.UIKey then
+            menu.Frame.Visible = not menu.Frame.Visible
+            UIState.MenuOpen = menu.Frame.Visible
+        end
+    end)
+
+    -- Initialize FOV Circle
+    local fovCircle = createDrawing("Circle", {
+        Position = camera:WorldToViewportPoint(player.Character.HumanoidRootPart.Position),
+        Radius = CONFIG.AimbotFOV,
+        Color = Color3.fromRGB(0, 200, 255),
+        Thickness = 2,
+        Filled = false,
+        Alpha = 0.7,
+    })
+    UIState.DrawingCache.fovCircle = fovCircle
+
+    print("✅ Havoc | Potassium Exploit Loaded Successfully")
+end
+
+-- == RUN SCRIPT ==
+main()
